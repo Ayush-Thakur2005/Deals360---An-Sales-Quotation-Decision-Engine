@@ -475,8 +475,7 @@ curl -H "Authorization: Bearer <TOKEN>" \
 ---
 
 ## 📄 License
-
-This project was built as a demonstration / portfolio codebase. Add your preferred license before public distribution.
+  MIT License.
 
 ---
 
