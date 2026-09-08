@@ -144,16 +144,27 @@ export function DealHealthPage() {
   const [error, setError] = useState('')
   const [anomalyPage, setAnomalyPage] = useState(1)
   const [stalledPage, setStalledPage] = useState(1)
+  const [refreshing, setRefreshing] = useState(false)
   const pageSize = 10
 
-  useEffect(() => {
-    Promise.all([fetchAnomalies(), fetchStalledQuotes()])
+  const loadDealHealth = (showFullPageLoader = false) => {
+    if (showFullPageLoader) setLoading(true)
+    else setRefreshing(true)
+    setError('')
+    return Promise.all([fetchAnomalies(), fetchStalledQuotes()])
       .then(([a, s]) => {
         setAnomalies(a.anomalies)
         setStalled(s.quotes.filter((q) => q.isStalled))
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : 'Failed to load deal health'))
-      .finally(() => setLoading(false))
+      .finally(() => {
+        setLoading(false)
+        setRefreshing(false)
+      })
+  }
+
+  useEffect(() => {
+    loadDealHealth(true)
   }, [])
 
   const anomalySlice = useMemo(() => {
@@ -177,17 +188,31 @@ export function DealHealthPage() {
       <h1 className="text-xl font-semibold">Deal Health</h1>
 
       <Card>
-        <CardHeader title="Discount Anomalies" subtitle="Deviations from rep historical behavior (z-score)" />
+        <CardHeader
+          title="Discount Anomalies"
+          subtitle="Each line is compared to the rep's approved/confirmed deal history. Same discount % on the same rep yields the same z-score — one row per anomalous line on open quotes (Draft / Pending approval)."
+          action={
+            <button
+              type="button"
+              onClick={() => loadDealHealth()}
+              disabled={refreshing}
+              className="text-xs font-medium text-[var(--color-brand)] disabled:opacity-50"
+            >
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          }
+        />
         <Table>
-          <thead><tr><Th>Rep</Th><Th>Deal</Th><Th>Discount</Th><Th>Z-Score</Th><Th>Status</Th></tr></thead>
+          <thead><tr><Th>Rep</Th><Th>Deal</Th><Th>Product</Th><Th>Discount</Th><Th>Z-Score</Th><Th>Status</Th></tr></thead>
           <tbody>
             {anomalies.length === 0 ? (
-              <tr><Td colSpan={5} className="text-center py-6 text-[var(--color-muted)]">No anomalies detected</Td></tr>
+              <tr><Td colSpan={6} className="text-center py-6 text-[var(--color-muted)]">No anomalies detected</Td></tr>
             ) : (
               anomalySlice.map((a) => (
                 <Tr key={`${a.quoteId}-${a.lineId}`}>
                   <Td>{a.repName}</Td>
                   <Td><Link to={`/app/deals/${a.quoteId}`} className="text-[var(--color-brand)]">{shortQuoteId(a.quoteId)}</Link></Td>
+                  <Td>{a.productName}</Td>
                   <Td className={a.zScore >= 2 ? 'text-[var(--color-danger)] font-medium' : ''}>{a.discountPercent}%</Td>
                   <Td>{a.zScore.toFixed(1)}</Td>
                   <Td>

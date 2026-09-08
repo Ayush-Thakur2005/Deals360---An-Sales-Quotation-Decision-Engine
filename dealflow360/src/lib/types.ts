@@ -163,6 +163,7 @@ export interface ApiReplayResult {
 export interface ApiAnomaly {
   quoteId: string
   lineId: string
+  productName: string
   discountPercent: number
   zScore: number
   repName: string

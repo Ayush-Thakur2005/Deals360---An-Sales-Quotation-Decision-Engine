@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { Card, CardHeader } from '../../components/ui/Card'
@@ -7,6 +7,7 @@ import { Table, Th, Td, Tr } from '../../components/ui/Table'
 import { Modal } from '../../components/ui/Modal'
 import { NumericInput } from '../../components/ui/NumericInput'
 import { Pagination } from '../../components/ui/Pagination'
+import { QuoteRecommendationsPanel } from '../../components/business/QuoteRecommendationsPanel'
 import { QuoteRiskPanel } from '../../components/business/QuoteRiskPanel'
 import { ApiError } from '../../lib/api'
 import {
@@ -19,7 +20,6 @@ import {
   fetchFulfillment,
   fetchLedger,
   fetchProducts,
-  fetchRecommendations,
   replayQuote,
   respondChangeRequest,
   sendQuoteToPortal,
@@ -113,35 +113,14 @@ function QuoteTab({
 }: Omit<Props, 'activeTab'>) {
   const [showAdd, setShowAdd] = useState(false)
   const [products, setProducts] = useState<ApiProduct[]>([])
-  const [recs, setRecs] = useState<ApiRecommendation[]>([])
   const [addForm, setAddForm] = useState({ productId: '', quantity: 1, discountPercent: 0 })
+  const quoteProductIds = useMemo(() => new Set(quote.lines.map((l) => l.productId)), [quote.lines])
   const canAddLine = usePermission('quote.addLine')
   const canSubmitQuote = usePermission('quote.submit')
   const canSendQuote = usePermission('quote.sendToCustomer')
   const isDraft = quoteIsDraft(quote)
   const pendingApproval = quote.status === 'PENDING_APPROVAL'
   const canSubmit = isDraft && quote.lines.length > 0 && canSubmitQuote
-
-  useEffect(() => {
-    const productIds = [...new Set(quote.lines.map((l) => l.productId))]
-    if (productIds.length === 0) {
-      setRecs([])
-      return
-    }
-    Promise.all(productIds.map((id) => fetchRecommendations(id).catch(() => ({ recommendations: [] }))))
-      .then((results) => {
-        const merged = new Map<string, ApiRecommendation>()
-        for (const r of results) {
-          for (const rec of r.recommendations) {
-            if (!quote.lines.some((l) => l.productId === rec.productId)) {
-              merged.set(rec.productId, rec)
-            }
-          }
-        }
-        setRecs([...merged.values()].slice(0, 6))
-      })
-      .catch(() => setRecs([]))
-  }, [quote.lines])
 
   const openAdd = async () => {
     try {
@@ -360,31 +339,17 @@ function QuoteTab({
               <p className="text-sm text-[var(--color-muted)] py-4 text-center">No products on this quote yet.</p>
             )}
           </Card>
-
-          {recs.length > 0 && (
-            <Card>
-              <CardHeader title="Recommendations" subtitle="Based on products in this quote" />
-              <div className="grid sm:grid-cols-2 gap-3">
-                {recs.map((r) => (
-                  <div key={r.productId} className="p-3 border border-[var(--color-border)] rounded-md text-sm">
-                    <p className="font-medium">{r.productName}</p>
-                    <p className="text-[var(--color-muted)] text-xs mt-1">Lift: {r.liftScore}x</p>
-                    {r.promotionTag && (
-                      <span className="text-xs text-[var(--color-brand)]">{r.promotionTag}</span>
-                    )}
-                    {isDraft && canAddLine && (
-                      <Button size="sm" className="mt-2" onClick={() => addRecToQuote(r)} disabled={actionLoading}>
-                        Add to Quote
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
         </div>
 
         <div className="space-y-4">
+          <QuoteRecommendationsPanel
+            lines={lines}
+            quoteProductIds={quoteProductIds}
+            canAddLine={canAddLine}
+            isDraft={isDraft}
+            actionLoading={actionLoading}
+            onAddRecommendation={addRecToQuote}
+          />
           <Card>
             <h3 className="text-sm font-semibold mb-3">Summary</h3>
             <div className="text-sm space-y-2">

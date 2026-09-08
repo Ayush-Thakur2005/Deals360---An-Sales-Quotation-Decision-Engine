@@ -160,6 +160,20 @@ export function PortalQuotePage() {
                   You confirmed this quotation — your sales rep will proceed with fulfillment and billing.
                 </span>
               </>
+            ) : quote.status === 'SENT' || quote.status === 'APPROVED' ? (
+              <>
+                <span className="text-[var(--color-muted)]">Status:</span>
+                <span className="font-medium text-[var(--color-success)]">
+                  Approved by your sales team — ready for your confirmation
+                </span>
+              </>
+            ) : quote.status === 'UNDER_NEGOTIATION' && pendingCount > 0 ? (
+              <>
+                <span className="text-[var(--color-muted)]">Status:</span>
+                <span className="font-medium text-[var(--color-warning)]">
+                  Your change request is being reviewed by the sales team
+                </span>
+              </>
             ) : (
               <>
                 <span className="text-[var(--color-muted)]">Pricing review:</span>
@@ -267,7 +281,13 @@ export function PortalQuotePage() {
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-semibold">Confirm quotation</h2>
-              <p className="text-sm text-[var(--color-muted)]">Accept the terms as presented.</p>
+              <p className="text-sm text-[var(--color-muted)]">
+                {canConfirm
+                  ? 'Accept the terms as presented.'
+                  : pendingCount > 0
+                    ? 'Confirmation is available once your sales rep resolves pending change requests.'
+                    : 'This quotation is not ready to confirm yet. Contact your sales rep if you need help.'}
+              </p>
             </div>
             <Button onClick={confirm} disabled={!canConfirm || confirming}>
               {confirming ? 'Confirming…' : 'Confirm Quotation'}

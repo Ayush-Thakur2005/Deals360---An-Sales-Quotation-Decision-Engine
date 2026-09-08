@@ -8,6 +8,7 @@ import * as dealHealthService from './deal-health.service.js'
 const anomalySchema = z.object({
   quoteId: z.string().uuid(),
   lineId: z.string().uuid(),
+  productName: z.string(),
   discountPercent: z.number(),
   zScore: z.number(),
   repName: z.string(),

@@ -96,7 +96,7 @@ export async function getCurrentDwellTime(quoteId: string): Promise<number> {
 export async function getDiscountAnomalies() {
   const quotes = await prisma.quote.findMany({
     where: { status: { in: ACTIONABLE_STATUSES } },
-    include: { lines: true },
+    include: { lines: { include: { product: { select: { name: true } } } } },
   })
 
   const repIds = [...new Set(quotes.map((q) => q.repUserId))]
@@ -109,6 +109,7 @@ export async function getDiscountAnomalies() {
   const anomalies: Array<{
     quoteId: string
     lineId: string
+    productName: string
     discountPercent: number
     zScore: number
     repName: string
@@ -123,6 +124,7 @@ export async function getDiscountAnomalies() {
         anomalies.push({
           quoteId: quote.id,
           lineId: line.id,
+          productName: line.product.name,
           discountPercent: line.discountPercent,
           zScore: Math.round(zScore * 1000) / 1000,
           repName: repNameById.get(quote.repUserId) ?? 'Unknown',

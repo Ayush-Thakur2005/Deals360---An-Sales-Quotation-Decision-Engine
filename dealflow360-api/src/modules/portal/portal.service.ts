@@ -28,6 +28,24 @@ function decimalToNumber(value: { toNumber(): number } | number): number {
   return typeof value === 'number' ? value : value.toNumber()
 }
 
+/** After all change requests are resolved, return quote to customer-facing SENT so they can confirm. */
+async function restoreQuoteForCustomerConfirmation(quoteId: string): Promise<void> {
+  const pendingCount = await prisma.changeRequest.count({
+    where: { quoteId, status: 'PENDING' },
+  })
+  if (pendingCount > 0) return
+
+  const quote = await prisma.quote.findUnique({ where: { id: quoteId } })
+  if (!quote) return
+
+  if (quote.status === 'UNDER_NEGOTIATION') {
+    await prisma.quote.update({
+      where: { id: quoteId },
+      data: { status: 'SENT' },
+    })
+  }
+}
+
 export async function requestPortalAccess(
   app: FastifyInstance,
   quoteId: string,
@@ -200,6 +218,8 @@ export async function getPortalQuoteView(app: FastifyInstance, token: string) {
     await markPortalSessionUsed(session.id)
   }
 
+  await restoreQuoteForCustomerConfirmation(payload.quoteId)
+
   const quote = await prisma.quote.findUnique({
     where: { id: payload.quoteId },
     include: {
@@ -371,7 +391,14 @@ export async function respondToChangeRequest(
       actorUserId,
     })
 
-    return { changeRequestId, status: 'REJECTED' as const, quoteStatus: quote.status }
+    await restoreQuoteForCustomerConfirmation(quoteId)
+    const updated = await prisma.quote.findUnique({ where: { id: quoteId } })
+
+    return {
+      changeRequestId,
+      status: 'REJECTED' as const,
+      quoteStatus: updated?.status ?? quote.status,
+    }
   }
 
   let newRisk = oldRisk
@@ -441,11 +468,14 @@ export async function respondToChangeRequest(
       where: { quoteId, status: 'PENDING' },
     })
 
-    if (pendingCount === 0 && newChain.length === 0) {
-      await prisma.quote.update({
-        where: { id: quoteId },
-        data: { status: 'APPROVED' },
-      })
+    if (pendingCount === 0 && !reenteredApproval) {
+      await restoreQuoteForCustomerConfirmation(quoteId)
+      if (newChain.length === 0) {
+        await prisma.quote.update({
+          where: { id: quoteId },
+          data: { status: 'APPROVED' },
+        })
+      }
     }
   }
 
@@ -482,7 +512,13 @@ export async function confirmQuoteFromPortal(app: FastifyInstance, token: string
     throw Object.assign(new Error('Quote not found'), { statusCode: 404 })
   }
 
-  if (quote.status !== 'APPROVED' && quote.status !== 'SENT') {
+  await restoreQuoteForCustomerConfirmation(payload.quoteId)
+  const quoteForConfirm = await prisma.quote.findUnique({ where: { id: payload.quoteId } })
+  if (!quoteForConfirm) {
+    throw Object.assign(new Error('Quote not found'), { statusCode: 404 })
+  }
+
+  if (quoteForConfirm.status !== 'APPROVED' && quoteForConfirm.status !== 'SENT') {
     throw Object.assign(
       new Error('Quote must be APPROVED or SENT to confirm'),
       { statusCode: 400 },
